@@ -9,6 +9,7 @@ from connect_ffi import ffi, lib, C
 from console_callbacks import audio_arg_parser, mixer, error_callback, connection_callbacks, debug_callbacks, playback_callbacks, playback_setup
 from lastfm import lastfm_arg_parser
 from utils import print_zeroconf_vars
+import cec
 
 class Connect:
     def __init__(self, error_cb = error_callback, web_arg_parser = None):
@@ -23,6 +24,7 @@ class Connect:
         arg_parser.add_argument('--name', '-n', help='name that shows up in the spotify client', default='TestConnect')
         arg_parser.add_argument('--bitrate', '-b', help='Sets bitrate of audio stream (may not actually work)', choices=[90, 160, 320], type=int, default=160)
         arg_parser.add_argument('--credentials', '-c', help='File to load and save credentials from/to', default='credentials.json')
+        arg_parser.add_argument('--cec', '-e', help='Device name for HDMI-Cec control', default='')
         self.args = arg_parser.parse_args()
 
         print "Using libspotify_embedded version: {}".format(ffi.string(lib.SpGetLibraryVersion()))
@@ -110,6 +112,18 @@ class Connect:
             if __name__ == '__main__':
                 raise ValueError("No username given, and none stored")
 
+
+        devicename = self.args.cec
+
+        if devicename is 'tuner':
+            self.testHDMICec(self)
+            #self.connectWithHDMICec(self, cec.CECDEVICE_TUNER1)
+        # TODO: Add more switch cases for other device names...
+        else:
+            self.testHDMICec(self)
+            #self.connectWithHDMICec(self)
+
+
     def login(self, username=None, password=None, blob=None, zeroconf=None):
         if username is not None:
             self.credentials['username'] = username
@@ -126,6 +140,33 @@ class Connect:
             lib.SpConnectionLoginZeroConf(username, *zeroconf)
         else:
             raise ValueError("Must specify a login method (password, blob or zeroconf)")
+
+
+    def testHDMICec(self):
+        cec.init()
+
+        devices = cec.list_devices()
+
+        for device in devices:
+            print("Device: " + device.address + "\t| active?" + device.is_active())
+
+    def connectWithHDMICec(self, devicename=None):
+        if devicename is not None:
+            cec.init()
+
+            device = cec.Device(cec.CECDEVICE_TUNER1)
+
+            if not device.is_on():
+                device.power_on()
+
+            # set this device as source on the target device
+            destination = cec.CECDEVICE_TUNER1
+            opcode = cec.CEC_OPCODE_ACTIVE_SOURCE
+            parameters = bytes([0x20, 0x00])
+            cec.transmit(destination, opcode, parameters)
+
+
+
 
 def signal_handler(signal, frame):
         lib.SpConnectionLogout()
